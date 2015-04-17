@@ -1,0 +1,30 @@
+BitSeeds 0.7.0.1
+
+Copyright (c) 2015 BitSeeds Foundation
+Copyright (c) 2013 NovaCoin Developers
+Copyright (c) 2011-2012 PPCoin Developers
+Distributed under the MIT/X11 software license, see the accompanying
+file license.txt or http://www.opensource.org/licenses/mit-license.php.
+This product includes software developed by the OpenSSL Project for use in
+the OpenSSL Toolkit (http://www.openssl.org/).  This product includes
+cryptographic software written by Eric Young (eay@cryptsoft.com).
+
+
+Intro
+-----
+BitSeeds is a free open source project derived from Bitcoin, with
+the goal of providing a long-term energy-efficient SHA-256 based crypto-currency.
+Built on the foundation of Bitcoin, PPCoin and NovaCoin, innovations such as proof-of-stake
+help further advance the field of crypto-currency.
+
+Custody Amount
+--------------
+
+The custody amount of 100,000,000 BITS was generated in Block 1 (TX 43f83b979c7f66702bcee50293833cad16d07f6fab114f2b6fc0252de8720527) and is held in a 3-of-4 multisig wallet (BhHpy32LSFgpqNp8ZUpq1dvyJYkuG83JTW) generated with the following public keys:
+
+Gabe Aronovich : 02f79cdcc8dde477bd4547fda9bc4405081067da7e631dcfb01fce0bc5e0b0402a
+Coin.co : 0314b1e751d0ae6d51805820ea5f64b9fc879454341e259d9b1a919e4710e9ede7
+Rainforest Foundation: 028b9da0d90bc9919648dc95dc07e4c8ac18512277acf6d9620bd24264de8920eb
+Bryce Weiner: 02567e06ff807804a16f189e43f3da8b6647bb0ad1a616386b0aa3e27363a2bdb6
+
+It was funded via a transaction added to the network in Block 111 (TX <insert ID here>), as soon as the coins were mature enough to spend.
