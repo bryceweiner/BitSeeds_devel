@@ -985,6 +985,9 @@ int64_t GetProofOfWorkReward(int nHeight, int64_t nFees)
 	} 
 
 	int64_t nSubsidyReductionInterval = 25920;
+	if (fTestNet)
+		nSubsidyReductionInterval = 100;
+
 	float nReductions = 0;
 
 	if (nHeight > 210) // sanity check
@@ -994,7 +997,7 @@ int64_t GetProofOfWorkReward(int nHeight, int64_t nFees)
 		return nFees;
 
 	int64_t nSubsidy = MAX_MINT_PROOF_OF_WORK;
-	if (nReductions <= 1)
+	if (nReductions < 1)
 		nSubsidy -= (nSubsidy * nReductions * 1);
 	else
 	{
@@ -1002,7 +1005,7 @@ int64_t GetProofOfWorkReward(int nHeight, int64_t nFees)
 	}
     nSubsidy = (nSubsidy / CENT) * CENT;
     if (fDebug && GetBoolArg("-printcreation"))
-        printf("GetProofOfWorkReward() : create=%s \n", FormatMoney(nSubsidy).c_str());
+        printf("GetProofOfWorkReward() : nReductions=%f, create=%s \n", nReductions, FormatMoney(nSubsidy).c_str());
 	return min(nSubsidy, MAX_MINT_PROOF_OF_WORK) + nFees;
 }
 
@@ -1183,7 +1186,7 @@ unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfS
     } 
     int64_t BlocksTargetSpacing = (!fTestNet) ? nTargetSpacing : nTargetSpacingTestNet;
     if (pindexLast->nHeight < 112)
-    	BlocksTargetSpacing = 0.1 * 60;
+    	BlocksTargetSpacing = 0.5 * 60;
 
     unsigned int TimeDaySeconds = 60 * 60 * 24;
     int64_t PastSecondsMin = TimeDaySeconds * 0.23;
