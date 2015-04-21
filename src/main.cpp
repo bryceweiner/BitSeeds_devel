@@ -19,6 +19,8 @@
 using namespace std;
 using namespace boost;
 
+const int AGW_FORK_BLOCK = 100000;
+const int AGW_FORK_BLOCK_TESTNET = 360;
 const bool IsCalculatingGenesisBlockHash = false;
 
 //
@@ -1119,6 +1121,83 @@ static unsigned int GetProofOfStakeTarget(const CBlockIndex* pindexLast)
     return bnNew.GetCompact();
 }
 
+// AntiGravityWave by reorder by btcdrak, derived from code by Evan Duffield - evan@darkcoin.io
+unsigned int static AntiGravityWave(const CBlockIndex* pindexLast, int64_t version)
+{
+    const CBlockIndex *BlockLastSolved = pindexLast;
+    const CBlockIndex *BlockReading = pindexLast;
+    int64_t nActualTimespan = 0;
+    int64_t LastBlockTime = 0;
+    int64_t PastBlocksMin = 24;
+    int64_t PastBlocksMax = 24;
+
+    if (version == 1) {
+        PastBlocksMin = 24;
+        PastBlocksMax = 24;
+    } else if (version == 2) {
+        PastBlocksMin = 72;
+        PastBlocksMax = 72;
+    }
+
+    int64_t CountBlocks = 0;
+    CBigNum PastDifficultyAverage;
+    CBigNum PastDifficultyAveragePrev;
+    CBigNum nBits;
+    nBits.SetCompact(BlockReading->nBits);
+    if (BlockLastSolved == NULL || BlockLastSolved->nHeight == 0 || BlockLastSolved->nHeight < PastBlocksMin) {
+        return bnProofOfWorkLimit.GetCompact();
+    }
+
+    for (unsigned int i = 1; BlockReading && BlockReading->nHeight > 0; i++) {
+        if (PastBlocksMax > 0 && i > PastBlocksMax) { break; }
+            CountBlocks++;
+
+        if (CountBlocks <= PastBlocksMin) {
+            if (CountBlocks == 1)
+                PastDifficultyAverage.SetCompact(BlockReading->nBits);
+            else { PastDifficultyAverage = ((PastDifficultyAveragePrev * CountBlocks)+(nBits)) / (CountBlocks+1); }
+                PastDifficultyAveragePrev = PastDifficultyAverage;
+        }
+
+        if (LastBlockTime > 0) {
+            int64_t Diff = (LastBlockTime - BlockReading->GetBlockTime());
+            nActualTimespan += Diff;
+        }
+        LastBlockTime = BlockReading->GetBlockTime();
+
+        if (BlockReading->pprev == NULL) { assert(BlockReading); break; }
+            BlockReading = BlockReading->pprev;
+    }
+
+    CBigNum bnNew(PastDifficultyAverage);
+
+    if (version == 2)
+        --CountBlocks;
+
+    int64_t nTargetTimespanX = CountBlocks*nTargetTimespan;
+
+    int64_t div = 3;
+    if (version == 1)
+        div = 3;
+    else if (version == 2)
+        div = 2;
+
+    if (nActualTimespan < nTargetTimespanX/div)
+        nActualTimespan = nTargetTimespanX/div;
+    if (nActualTimespan > nTargetTimespanX*div)
+        nActualTimespan = nTargetTimespanX*div;
+
+    // Retarget
+    bnNew *= nActualTimespan;
+    bnNew /= nTargetTimespanX;
+
+    if (bnNew > bnProofOfWorkLimit) {
+        bnNew = bnProofOfWorkLimit;
+    }
+
+    return bnNew.GetCompact();
+}
+
 unsigned int static KimotoGravityWell(const CBlockIndex* pindexLast, uint64_t TargetBlocksSpacingSeconds, uint64_t PastBlocksMin, uint64_t PastBlocksMax) {
         /* current difficulty formula, megacoin - kimoto gravity well */
         const CBlockIndex *BlockLastSolved = pindexLast;
@@ -1183,17 +1262,25 @@ unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfS
 {
     if (fProofOfStake) { 
 		return GetProofOfStakeTarget(pindexLast);
-    } 
-    int64_t BlocksTargetSpacing = (!fTestNet) ? nTargetSpacing : nTargetSpacingTestNet;
-    if (pindexLast->nHeight < 112)
-    	BlocksTargetSpacing = 0.5 * 60;
+    }
+    if (pindexLast->nHeight < ((fTestNet)?AGW_FORK_BLOCK_TESTNET:AGW_FORK_BLOCK))
+    {
+	    int64_t BlocksTargetSpacing = (fTestNet) ? nTargetSpacing : nTargetSpacingTestNet;
+	    if (pindexLast->nHeight < 112)
+	    	BlocksTargetSpacing = 0.5 * 60;
 
-    unsigned int TimeDaySeconds = 60 * 60 * 24;
-    int64_t PastSecondsMin = TimeDaySeconds * 0.23;
-    int64_t PastSecondsMax = TimeDaySeconds * 1;
-    uint64_t PastBlocksMin = PastSecondsMin / BlocksTargetSpacing;
-    uint64_t PastBlocksMax = PastSecondsMax / BlocksTargetSpacing;
-    return KimotoGravityWell(pindexLast, BlocksTargetSpacing, PastBlocksMin, PastBlocksMax);
+	    unsigned int TimeDaySeconds = 60 * 60 * 24;
+	    int64_t PastSecondsMin = TimeDaySeconds * 0.23;
+	    int64_t PastSecondsMax = TimeDaySeconds * 1;
+	    uint64_t PastBlocksMin = PastSecondsMin / BlocksTargetSpacing;
+	    uint64_t PastBlocksMax = PastSecondsMax / BlocksTargetSpacing;
+	    return KimotoGravityWell(pindexLast, BlocksTargetSpacing, PastBlocksMin, PastBlocksMax);
+
+    }
+    if (pindexLast->nHeight < ((fTestNet)?AGW_FORK_BLOCK_TESTNET:AGW_FORK_BLOCK) + 280)
+    	return AntiGravityWave(pindexLast,1);
+
+	return AntiGravityWave(pindexLast,2);
 }
 
 bool CheckProofOfWork(uint256 hash, unsigned int nBits)
