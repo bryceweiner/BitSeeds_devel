@@ -1265,7 +1265,7 @@ unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfS
     }
     if (pindexLast->nHeight < ((fTestNet)?AGW_FORK_BLOCK_TESTNET:AGW_FORK_BLOCK))
     {
-	    int64_t BlocksTargetSpacing = (fTestNet) ? nTargetSpacing : nTargetSpacingTestNet;
+	    int64_t BlocksTargetSpacing = (!fTestNet) ? nTargetSpacing : nTargetSpacingTestNet;
 	    if (pindexLast->nHeight < 112)
 	    	BlocksTargetSpacing = 0.5 * 60;
 
