@@ -24,7 +24,7 @@ class CInv;
 class CRequestTracker;
 class CNode;
 
-static const int LAST_POW_BLOCK = INT_MAX; 
+static const int LAST_POW_BLOCK = 76300; 
 
 static const unsigned int MAX_BLOCK_SIZE = 1000000;
 static const unsigned int MAX_BLOCK_SIZE_GEN = MAX_BLOCK_SIZE/2;
@@ -136,6 +136,7 @@ void ResendWalletTransactions(bool fForce = false);
 
 
 bool GetWalletFile(CWallet* pwallet, std::string &strWalletFileOut);
+
 
 /** Position on disk for a particular transaction. */
 class CDiskTxPos

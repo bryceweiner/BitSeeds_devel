@@ -168,8 +168,8 @@ Value getworkex(const Array& params, bool fHelp)
     if (IsInitialBlockDownload())
         throw JSONRPCError(-10, "BitSeeds is downloading blocks...");
 
-    //if (pindexBest->nHeight >= LAST_POW_BLOCK)
-    //   throw JSONRPCError(RPC_MISC_ERROR, "No more PoW blocks");
+    if (pindexBest->nHeight >= LAST_POW_BLOCK)
+       throw JSONRPCError(RPC_MISC_ERROR, "No more PoW blocks");
 
     typedef map<uint256, pair<CBlock*, CScript> > mapNewBlock_t;
     static mapNewBlock_t mapNewBlock;
@@ -194,6 +194,10 @@ Value getworkex(const Array& params, bool fHelp)
                     delete pblock;
                 vNewBlock.clear();
             }
+
+            // Clear pindexPrev so future getworks make a new block, despite any failures from here on
+            pindexPrev = NULL;
+
             nTransactionsUpdatedLast = nTransactionsUpdated;
             pindexPrev = pindexBest;
             nStart = GetTime();
@@ -204,7 +208,7 @@ Value getworkex(const Array& params, bool fHelp)
                 throw JSONRPCError(-7, "Out of memory");
             vNewBlock.push_back(pblock);
         }
-
+ 
         // Update nTime
         pblock->nTime = max(pindexPrev->GetPastTimeLimit()+1, GetAdjustedTime());
         pblock->nNonce = 0;
@@ -302,8 +306,8 @@ Value getwork(const Array& params, bool fHelp)
     if (IsInitialBlockDownload())
         throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "BitSeeds is downloading blocks...");
 
-    //if (pindexBest->nHeight >= LAST_POW_BLOCK)
-    //    throw JSONRPCError(RPC_MISC_ERROR, "No more PoW blocks");
+    if (pindexBest->nHeight >= LAST_POW_BLOCK)
+        throw JSONRPCError(RPC_MISC_ERROR, "No more PoW blocks");
 
     typedef map<uint256, pair<CBlock*, CScript> > mapNewBlock_t;
     static mapNewBlock_t mapNewBlock;    // FIXME: thread safety
@@ -446,8 +450,8 @@ Value getblocktemplate(const Array& params, bool fHelp)
     if (IsInitialBlockDownload())
         throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "BitSeeds is downloading blocks...");
 
-    //if (pindexBest->nHeight >= LAST_POW_BLOCK)
-    //    throw JSONRPCError(RPC_MISC_ERROR, "No more PoW blocks");
+    if (pindexBest->nHeight >= LAST_POW_BLOCK)
+        throw JSONRPCError(RPC_MISC_ERROR, "No more PoW blocks");
 
     static CReserveKey reservekey(pwalletMain);
 

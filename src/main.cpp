@@ -19,6 +19,8 @@
 using namespace std;
 using namespace boost;
 
+const int AGW_FORK_BLOCK = 100000;
+const int AGW_FORK_BLOCK_TESTNET = 360;
 const bool IsCalculatingGenesisBlockHash = false;
 
 //
@@ -77,7 +79,16 @@ int64_t nReserveBalance = 0;
 int64_t nMinimumInputValue = 0;
 
 extern enum Checkpoints::CPMode CheckpointsMode;
+/*
+struct BlacklistEntry {
+    CBitcoinAddress address;
+};
 
+static struct BlacklistEntry Blacklist[] = {
+    {CBitcoinAddress("")} // Sabotage wallet
+};
+
+*/
 //////////////////////////////////////////////////////////////////////////////
 //
 // dispatching functions
@@ -312,6 +323,23 @@ bool CTransaction::IsStandard() const
         if (fEnforceCanonical && !txin.scriptSig.HasCanonicalPushes()) {
             return false;
         }
+/*        
+        uint256 hashBlock;
+        CTransaction txPrev;
+        if(GetTransaction(txin.prevout.hash, txPrev, hashBlock)){ // get the vin's previous transaction
+            CTxDestination source;
+            if (ExtractDestination(txPrev.vout[txin.prevout.n].scriptPubKey, source)){ // extract the destination of the previous transaction's vout[n]
+                CBitcoinAddress addressSource(source);
+            	unsigned i;
+            	for (i = 0; i < (sizeof(Blacklist) / sizeof(Blacklist[0])); ++i)
+	                if (Blacklist[i].address.Get() == addressSource.Get()){
+	                    error("Blacklisted Address %s tried to send a transaction (rejecting it).", addressSource.ToString().c_str());
+
+	                    return false;
+	                }
+            }
+        }
+*/
     }
     BOOST_FOREACH(const CTxOut& txout, vout) {
         if (!::IsStandard(txout.scriptPubKey))
@@ -1119,6 +1147,83 @@ static unsigned int GetProofOfStakeTarget(const CBlockIndex* pindexLast)
     return bnNew.GetCompact();
 }
 
+// AntiGravityWave by reorder by btcdrak, derived from code by Evan Duffield - evan@darkcoin.io
+unsigned int static AntiGravityWave(const CBlockIndex* pindexLast, int64_t version)
+{
+    const CBlockIndex *BlockLastSolved = pindexLast;
+    const CBlockIndex *BlockReading = pindexLast;
+    int64_t nActualTimespan = 0;
+    int64_t LastBlockTime = 0;
+    int64_t PastBlocksMin = 24;
+    int64_t PastBlocksMax = 24;
+
+    if (version == 1) {
+        PastBlocksMin = 24;
+        PastBlocksMax = 24;
+    } else if (version == 2) {
+        PastBlocksMin = 72;
+        PastBlocksMax = 72;
+    }
+
+    int64_t CountBlocks = 0;
+    CBigNum PastDifficultyAverage;
+    CBigNum PastDifficultyAveragePrev;
+    CBigNum nBits;
+    nBits.SetCompact(BlockReading->nBits);
+    if (BlockLastSolved == NULL || BlockLastSolved->nHeight == 0 || BlockLastSolved->nHeight < PastBlocksMin) {
+        return bnProofOfWorkLimit.GetCompact();
+    }
+
+    for (unsigned int i = 1; BlockReading && BlockReading->nHeight > 0; i++) {
+        if (PastBlocksMax > 0 && i > PastBlocksMax) { break; }
+            CountBlocks++;
+
+        if (CountBlocks <= PastBlocksMin) {
+            if (CountBlocks == 1)
+                PastDifficultyAverage.SetCompact(BlockReading->nBits);
+            else { PastDifficultyAverage = ((PastDifficultyAveragePrev * CountBlocks)+(nBits)) / (CountBlocks+1); }
+                PastDifficultyAveragePrev = PastDifficultyAverage;
+        }
+
+        if (LastBlockTime > 0) {
+            int64_t Diff = (LastBlockTime - BlockReading->GetBlockTime());
+            nActualTimespan += Diff;
+        }
+        LastBlockTime = BlockReading->GetBlockTime();
+
+        if (BlockReading->pprev == NULL) { assert(BlockReading); break; }
+            BlockReading = BlockReading->pprev;
+    }
+
+    CBigNum bnNew(PastDifficultyAverage);
+
+    if (version == 2)
+        --CountBlocks;
+
+    int64_t nTargetTimespanX = CountBlocks*nTargetTimespan;
+
+    int64_t div = 3;
+    if (version == 1)
+        div = 3;
+    else if (version == 2)
+        div = 2;
+
+    if (nActualTimespan < nTargetTimespanX/div)
+        nActualTimespan = nTargetTimespanX/div;
+    if (nActualTimespan > nTargetTimespanX*div)
+        nActualTimespan = nTargetTimespanX*div;
+
+    // Retarget
+    bnNew *= nActualTimespan;
+    bnNew /= nTargetTimespanX;
+
+    if (bnNew > bnProofOfWorkLimit) {
+        bnNew = bnProofOfWorkLimit;
+    }
+
+    return bnNew.GetCompact();
+}
+
 unsigned int static KimotoGravityWell(const CBlockIndex* pindexLast, uint64_t TargetBlocksSpacingSeconds, uint64_t PastBlocksMin, uint64_t PastBlocksMax) {
         /* current difficulty formula, megacoin - kimoto gravity well */
         const CBlockIndex *BlockLastSolved = pindexLast;
@@ -1183,17 +1288,25 @@ unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, bool fProofOfS
 {
     if (fProofOfStake) { 
 		return GetProofOfStakeTarget(pindexLast);
-    } 
-    int64_t BlocksTargetSpacing = (!fTestNet) ? nTargetSpacing : nTargetSpacingTestNet;
-    if (pindexLast->nHeight < 112)
-    	BlocksTargetSpacing = 0.5 * 60;
+    }
+    if (pindexLast->nHeight < ((fTestNet)?AGW_FORK_BLOCK_TESTNET:AGW_FORK_BLOCK))
+    {
+	    int64_t BlocksTargetSpacing = (!fTestNet) ? nTargetSpacing : nTargetSpacingTestNet;
+	    if (pindexLast->nHeight < 112)
+	    	BlocksTargetSpacing = 0.5 * 60;
 
-    unsigned int TimeDaySeconds = 60 * 60 * 24;
-    int64_t PastSecondsMin = TimeDaySeconds * 0.23;
-    int64_t PastSecondsMax = TimeDaySeconds * 1;
-    uint64_t PastBlocksMin = PastSecondsMin / BlocksTargetSpacing;
-    uint64_t PastBlocksMax = PastSecondsMax / BlocksTargetSpacing;
-    return KimotoGravityWell(pindexLast, BlocksTargetSpacing, PastBlocksMin, PastBlocksMax);
+	    unsigned int TimeDaySeconds = 60 * 60 * 24;
+	    int64_t PastSecondsMin = TimeDaySeconds * 0.23;
+	    int64_t PastSecondsMax = TimeDaySeconds * 1;
+	    uint64_t PastBlocksMin = PastSecondsMin / BlocksTargetSpacing;
+	    uint64_t PastBlocksMax = PastSecondsMax / BlocksTargetSpacing;
+	    return KimotoGravityWell(pindexLast, BlocksTargetSpacing, PastBlocksMin, PastBlocksMax);
+
+    }
+    if (pindexLast->nHeight < ((fTestNet)?AGW_FORK_BLOCK_TESTNET:AGW_FORK_BLOCK) + 280)
+    	return AntiGravityWave(pindexLast,1);
+
+	return AntiGravityWave(pindexLast,2);
 }
 
 bool CheckProofOfWork(uint256 hash, unsigned int nBits)
@@ -2223,8 +2336,8 @@ bool CBlock::AcceptBlock()
     CBlockIndex* pindexPrev = (*mi).second;
     int nHeight = pindexPrev->nHeight+1;
 
-    //if (IsProofOfWork() && nHeight > LAST_POW_BLOCK)
-    //    return DoS(100, error("AcceptBlock() : reject proof-of-work at height %d", nHeight));
+    if (IsProofOfWork() && nHeight > LAST_POW_BLOCK)
+        return DoS(100, error("AcceptBlock() : reject proof-of-work at height %d", nHeight));
 
     // Check proof-of-work or proof-of-stake
     if (nBits != GetNextTargetRequired(pindexPrev, IsProofOfStake()))
@@ -2236,9 +2349,29 @@ bool CBlock::AcceptBlock()
 
     // Check that all transactions are finalized
     BOOST_FOREACH(const CTransaction& tx, vtx)
+    {
         if (!tx.IsFinal(nHeight, GetBlockTime()))
             return DoS(10, error("AcceptBlock() : contains a non-final transaction"));
-
+/*
+		if(nHeight > LAST_POW_BLOCK){
+			for (unsigned int i = 0; i < tx.vin.size(); i++){
+				uint256 hashBlock;
+				CTransaction txPrev;
+				if(GetTransaction(tx.vin[i].prevout.hash, txPrev, hashBlock)){ // get the vin's previous transaction
+					CTxDestination source;
+					if (ExtractDestination(txPrev.vout[tx.vin[i].prevout.n].scriptPubKey, source)){ // extract the destination of the previous transaction's vout[n]
+						CBitcoinAddress addressSource(source);
+		            	unsigned x;
+		            	for (x = 0; x < (sizeof(Blacklist) / sizeof(Blacklist[0])); ++x)
+			                if (Blacklist[x].address.Get() == addressSource.Get()){
+								return error("CBlock::AcceptBlock() : Blacklisted Address %s tried to send a transaction (rejecting it).", addressSource.ToString().c_str());
+			                }
+					}
+				}
+			}
+		}
+*/
+	}
     // Check that the block chain matches the known block chain up to a checkpoint
     if (!Checkpoints::CheckHardened(nHeight, hash))
         return DoS(100, error("AcceptBlock() : rejected by hardened checkpoint lock-in at %d", nHeight));
@@ -2434,6 +2567,7 @@ bool CBlock::SignBlock(CWallet& wallet, int64_t nFees)
     if (!vtx[0].vout[0].IsEmpty())
         return false;
 
+    if (fDebug) this->print();
     // if we are trying to sign
     //    a complete proof-of-stake block
     if (IsProofOfStake())

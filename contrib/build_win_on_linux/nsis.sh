@@ -9,17 +9,17 @@ export MAKEOPTS="-j4"                           # set to the number of cores you
 
 # installer
 cd $DEPSDIRT/bitseeds
-rm -rf nsis
-mkdir nsis
-git archive HEAD | tar -x -C nsis
+#rm -rf nsis
+#mkdir nsis
+#git archive HEAD | tar -x -C nsis
 cd nsis/src
-mkdir ../release
+#mkdir ../release
 cp ../../release/* ../release/
 cp ../../src/*.exe .
 makensis ../share/setup.nsi
 rm -rf $OUTDIR/setup
 mkdir $OUTDIR/setup
-cp ../share/bitseeds-*-win32-setup.exe $OUTDIR/setup/
+cp ../share/bitseeds-*.exe $OUTDIR/setup/
 
 # results
 cd $OUTDIR
